@@ -1,15 +1,22 @@
 import React, { Component } from 'react'
+import Hero from './Hero'
+// import Highscores from './HighScores'
+
+import 'bulma/css/bulma.css'
 import './App.css'
+
+const initialState = {
+  currWord: '',
+  score: 0,
+  textValue: '',
+  timer: 0,
+  intervalID: null
+}
 
 class App extends Component {
   constructor(props) {
     super(props)
-    console.log(props.socket)
-    this.state = {
-      currWord: '',
-      score: 0,
-      textValue: ''
-    }
+    this.state = initialState
   }
 
   componentWillMount() {
@@ -17,50 +24,72 @@ class App extends Component {
 
     socket.on('connect', data => {
       console.log('connecting')
-      socket.emit('join', 'New User Joined.')
+      // socket.emit('join', 'New User Joined.')
     })
 
     socket.on('new_word', data => {
-      console.log('setting new word')
-      this.setState({...this.state, currWord: data, textValue: ''})
+      this.setState({...this.state, currWord: data, textValue: '', timer: this.state.timer - 2})
     })
 
-    socket.on('game_over', () => {
-      alert('YOU LOST!')
-      this.setState({
-        currWord: '',
-        score: 0,
-        textValue: ''
-      })
+    socket.on('first_word', data => {
+      //Setting up the timer
+      const intervalID = setInterval(() => {
+        this.state.timer < 100
+          ? this.setState({...this.state, timer: this.state.timer + 0.1})
+          : this.gameOver()
+      }, 100)
+
+        this.setState({...this.state, currWord: data, textValue: '', intervalID})
     })
+
+    socket.on('game_over', () => this.gameOver())
 
     socket.on('update_score', score => {
-      console.log(document.getElementById('chat_input'))
       this.setState({...this.state, score: this.state.score + score})
     })
   }
 
+  gameOver() {
+    clearInterval(this.state.intervalID)
+    alert('YOU LOST!')
+    this.setState(initialState)
+  }
+
   handleSubmit(event) {
-    console.log('SUBMITTING')
     event.preventDefault()
-    this.props.socket.emit('messages', this.state.textValue.toLowerCase())
+    if(this.state.textValue.trim() !== '') {
+      this.props.socket.emit('check_word', this.state.textValue.toLowerCase())
+    }
   }
 
   handleTextChange(event) {
-    console.log('updating text change')
     this.setState({...this.state, textValue: event.target.value})
   }
 
+  componentDidUpdate() {
+    console.log('updated')
+  }
+
   render() {
-    console.log('hi from render')
+    const Controls = this.state.timer === 0
+      ? <button className="button is-primary is-large" onClick={() => {this.props.socket.emit('start_game')}}>Start Game</button>
+      : (
+          <form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
+            <input id="chat_input" type="text" autoComplete="off" value={this.state.textValue} onChange={this.handleTextChange.bind(this)} autoFocus />
+          </form>
+        )
+
     return (
       <div className="App">
-        <h1>The Word Game</h1>
-        <div id="score">{this.state.score}</div>
-        <div id="target_word">{this.state.currWord}</div>
-        <form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
-            <input type="text" autoComplete="off" id="chat_input" value={this.state.textValue} onChange={this.handleTextChange.bind(this)}/>
-        </form>
+        <Hero />
+        <section className="section">
+          <div className="container box">
+            <h1 className="title is-1">{this.state.currWord}</h1>
+            <progress className="progress is-danger is-medium" value={this.state.timer} max="100"></progress>
+            <h3 className="subtitle is-3 is-spaced">Score: {this.state.score}</h3>
+          </div>
+          {Controls}
+        </section>
       </div>
     )
   }
