@@ -1,7 +1,6 @@
 import React, { Component } from 'react'
 import Hero from './Hero'
 // import Highscores from './HighScores'
-import GameOver from './GameOver'
 
 import { clamp } from './utils'
 
@@ -10,10 +9,8 @@ import './App.css'
 
 /**
 TODO:
- - Better Game over screen
  - keep score during game over, should show you the highest score you've gotten so far.
- - if you typed the word wrong a punishment needs to be added
- - timer needs to get faster overtime
+ - MULTIPLAYER
 */
 
 const initialState = {
@@ -64,11 +61,11 @@ class App extends Component {
 
     socket.on('update_score', score => {
       let newScore = this.state.score + score
-      if(newScore % 10 === 0) {
+      if(newScore % 5 === 0) {
         //clear the old timer
         clearInterval(this.state.intervalID)
 
-        const newDifficulty = difficultyClamp(this.state.difficulty - 30)
+        const newDifficulty = difficultyClamp(this.state.difficulty - 25)
         //start a new one
         const intervalID = setInterval(() => {
           this.state.timer < 100
@@ -86,9 +83,8 @@ class App extends Component {
 
   gameOver() {
     clearInterval(this.state.intervalID)
-    // alert('YOU LOST!')
-    GameOver()
-    this.setState(initialState)
+
+    this.setState({...initialState, currWord: "Game Over"})
   }
 
   handleSubmit(event) {
@@ -106,7 +102,7 @@ class App extends Component {
   }
 
   render() {
-    const Controls = this.state.currWord === undefined
+    const Controls = (this.state.currWord === undefined || this.state.currWord === "Game Over")
       ? <button className="button is-primary is-large" onClick={() => {this.props.socket.emit('start_game')}}>Start Game</button>
       : (
           <form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
