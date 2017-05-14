@@ -18,9 +18,12 @@ const initialState = {
   score: 0,
   textValue: '',
   timer: 0,
-  intervalID: null,
+  timerIntervalID: null,
   difficulty: 100,
-  room: null
+  room: null,
+  opponentTimer: 0,
+  ointerval: null,
+  oid: null
 }
 
 const timerClamp = clamp(0, 100)
@@ -41,18 +44,16 @@ class App extends Component {
 
     socket.on('first_word', data => {
       //Setting up the timer
-      const intervalID = setInterval(() => {
+      const timerIntervalID = setInterval(() => {
         this.state.timer < 100
           ? this.setState({...this.state, timer: timerClamp(this.state.timer + 0.1)})
           : this.gameOver()
       }, this.state.difficulty)
 
-        this.setState({...this.state, currWord: data, textValue: '', intervalID})
+        this.setState({...this.state, currWord: data, textValue: '', timerIntervalID})
     })
 
-    socket.on('increase_timer', () => {
-      this.setState({...this.state, textValue: '', timer: timerClamp(this.state.timer + 2)})
-    })
+    socket.on('increase_timer', () => this.setState({...this.state, textValue: '', timer: timerClamp(this.state.timer + 2)}))
 
     socket.on('game_over', () => this.gameOver())
 
@@ -60,18 +61,18 @@ class App extends Component {
       let newScore = this.state.score + score
       if(newScore % 5 === 0) {
         //clear the old timer
-        clearInterval(this.state.intervalID)
+        clearInterval(this.state.timerIntervalID)
 
         const newDifficulty = difficultyClamp(this.state.difficulty - 25)
         //start a new one
-        const intervalID = setInterval(() => {
+        const timerIntervalID = setInterval(() => {
           this.state.timer < 100
             ? this.setState({...this.state, timer: timerClamp(this.state.timer + 0.1)})
             : this.gameOver()
         }, newDifficulty)
 
         //trigger render
-        this.setState({...this.state, score: newScore, difficulty: newDifficulty, intervalID})
+        this.setState({...this.state, score: newScore, difficulty: newDifficulty, timerIntervalID})
       } else {
         this.setState({...this.state, score: newScore})
       }
@@ -84,13 +85,18 @@ class App extends Component {
       this.setState({...this.state, room})
     })
 
+    socket.on('oid', oid => this.setState({...this.state, oid}))
+
+    socket.on('update_opponent_timer', newTime => this.setState({...this.state, opponentTimer: newTime}))
+
     socket.on('both_players_ready', () => {
-      console.log('HELLO!?')
+      const ointerval = setInterval(() => socket.emit('trigger_update_opponent_timer', {to: this.state.oid, newTime: this.state.timer}), 10)
+      this.setState({...this.state, ointerval})
     })
   }
 
   gameOver() {
-    clearInterval(this.state.intervalID)
+    clearInterval(this.state.timerIntervalID)
     this.setState({...initialState, currWord: "Game Over", score: this.state.score})
   }
 
@@ -117,15 +123,30 @@ class App extends Component {
           </form>
         )
 
+    const HUD = (
+      <div className="container box">
+        <h1 className="title is-1">{this.state.currWord}</h1>
+        { this.state.room
+          ? <p className="subtitle is-5 is-pulled-left">YOU</p>
+          : <span></span>
+        }
+        <progress className="progress is-success is-medium" value={this.state.timer} max="100"></progress>
+        { this.state.room
+          ? (
+              <div>
+                <p className="subtitle is-5 is-pulled-left">THE OTHER GUY</p>
+                <progress className="progress is-danger is-medium" value={this.state.opponentTimer} max="100"></progress>
+              </div>
+            )
+          : <span></span> }
+        <h3 className="subtitle is-3 is-spaced">Score: {this.state.score}</h3>
+      </div>
+    )
     return (
       <div className="App">
         <Hero />
         <section className="section">
-          <div className="container box">
-            <h1 className="title is-1">{this.state.currWord}</h1>
-            <progress className="progress is-danger is-medium" value={this.state.timer} max="100"></progress>
-            <h3 className="subtitle is-3 is-spaced">Score: {this.state.score}</h3>
-          </div>
+          {HUD}
           {Controls}
         </section>
       </div>
