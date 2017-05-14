@@ -9,8 +9,10 @@ import './App.css'
 
 /**
 TODO:
- - keep score during game over, should show you the highest score you've gotten so far.
- - MULTIPLAYER
+  - Keep multiplayer timers in fixed state after game to show how much you won/lost by
+  - input should be rendered after multiplayer game is over
+  - should render score for single player games
+  - should gracefully disconnect/cleanup room
 */
 
 const initialState = {
@@ -53,26 +55,15 @@ class App extends Component {
         this.setState({...this.state, currWord: data, textValue: '', timerIntervalID})
     })
 
-    socket.on('increase_timer', () => this.setState({...this.state, textValue: '', timer: timerClamp(this.state.timer + 2)}))
-
-    socket.on('game_over', () => this.gameOver())
+    socket.on('penalty', () => this.setState({...this.state, textValue: '', timer: timerClamp(this.state.timer + 2)}))
 
     socket.on('update_score', score => {
-      let newScore = this.state.score + score
+      const newScore = this.state.score + score
       if(newScore % 5 === 0) {
-        //clear the old timer
-        clearInterval(this.state.timerIntervalID)
-
-        const newDifficulty = difficultyClamp(this.state.difficulty - 25)
-        //start a new one
-        const timerIntervalID = setInterval(() => {
-          this.state.timer < 100
-            ? this.setState({...this.state, timer: timerClamp(this.state.timer + 0.1)})
-            : this.gameOver()
-        }, newDifficulty)
+        const { difficulty, timerIntervalID } = this.increaseSpeed()
 
         //trigger render
-        this.setState({...this.state, score: newScore, difficulty: newDifficulty, timerIntervalID})
+        this.setState({...this.state, score: newScore, difficulty, timerIntervalID})
       } else {
         this.setState({...this.state, score: newScore})
       }
@@ -89,15 +80,63 @@ class App extends Component {
 
     socket.on('update_opponent_timer', newTime => this.setState({...this.state, opponentTimer: newTime}))
 
+    socket.on('increase_speed', () => {
+      //clear the old timer
+      console.log('increasing speed')
+      const { difficulty, timerIntervalID } = this.increaseSpeed()
+      this.setState({...this.state, difficulty, timerIntervalID})
+    })
+
+    socket.on('game_over', () => this.gameOver())
+
     socket.on('both_players_ready', () => {
       const ointerval = setInterval(() => socket.emit('trigger_update_opponent_timer', {to: this.state.oid, newTime: this.state.timer}), 10)
       this.setState({...this.state, ointerval})
     })
   }
 
-  gameOver() {
+  increaseSpeed() {
+    //clear the old timer
     clearInterval(this.state.timerIntervalID)
-    this.setState({...initialState, currWord: "Game Over", score: this.state.score})
+
+    const difficulty = difficultyClamp(this.state.difficulty - 15)
+    //start a new one
+    const timerIntervalID = setInterval(() => {
+      if(this.state.oid) {
+        // Multiplayer Logic
+        (this.state.timer < 100 && this.state.opponentTimer < 100)
+          ? this.setState({...this.state, timer: timerClamp(this.state.timer + 0.1)})
+          : this.gameOver()
+      } else {
+        // Single Player Logic
+        this.state.timer < 100
+          ? this.setState({...this.state, timer: timerClamp(this.state.timer + 0.1)})
+          : this.gameOver()
+      }
+    }, difficulty)
+    return { difficulty, timerIntervalID }
+  }
+
+  gameOver() {
+    if(this.state.oid) {
+      //Multiplayer logic
+      // clear ointerval, tell opponent that you've finished the game.
+      clearInterval(this.state.timerIntervalID)
+      clearInterval(this.state.ointerval)
+      let currWord
+      if(this.state.timer > this.state.opponentTimer) {
+        currWord = `You Lose!`
+      } else if(this.state.timmer === this.state.opponentTimer) {
+        currWord = `Draw!`
+      } else {
+        currWord = `You Win!`
+      }
+      this.setState({...initialState, currWord})
+    } else {
+      //Single player logic
+      clearInterval(this.state.timerIntervalID)
+      this.setState({...initialState, currWord: "Game Over", score: this.state.score})
+    }
   }
 
   handleSubmit(event) {
@@ -105,7 +144,8 @@ class App extends Component {
     if(this.state.textValue.trim() !== '') {
       this.props.socket.emit('check_word', {
         currWord: this.state.currWord,
-        answer: this.state.textValue.toLowerCase()
+        answer: this.state.textValue.toLowerCase(),
+        isMultiplayer: Boolean(this.state.oid)
       })
     }
   }
@@ -139,7 +179,6 @@ class App extends Component {
               </div>
             )
           : <span></span> }
-        <h3 className="subtitle is-3 is-spaced">Score: {this.state.score}</h3>
       </div>
     )
     return (
