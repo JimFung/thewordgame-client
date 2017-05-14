@@ -1,0 +1,20 @@
+.left-button {
+  margin-left: auto;
+}
+
+.right-button {
+  margin-right: auto;
+}
+
+.instructions {
+  margin-top: 20px;
+}
+
+.instructions ol {
+  list-style-position: inside;
+}
+
+.instructions ol li {
+  font-size: 1.3em;
+  font-weight: bold;
+}

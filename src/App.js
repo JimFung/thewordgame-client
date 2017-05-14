@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
 import Hero from './Hero'
-// import Highscores from './HighScores'
+import Menu from './Menu'
 
 import { clamp } from './utils'
 
@@ -19,7 +19,8 @@ const initialState = {
   textValue: '',
   timer: 0,
   intervalID: null,
-  difficulty: 100
+  difficulty: 100,
+  room: null
 }
 
 const timerClamp = clamp(0, 100)
@@ -33,10 +34,6 @@ class App extends Component {
 
   componentWillMount() {
     let socket = this.props.socket
-
-    socket.on('connect', data => {
-      console.log('connecting')
-    })
 
     socket.on('new_word', data => {
       this.setState({...this.state, currWord: data.newWord, textValue: '', timer: timerClamp(this.state.timer - data.reduction)})
@@ -79,12 +76,22 @@ class App extends Component {
         this.setState({...this.state, score: newScore})
       }
     })
+
+    //multiplayer events
+    socket.on('join_room', room => {
+      console.log(`requesting to join ${room}`)
+      socket.emit('join', room)
+      this.setState({...this.state, room})
+    })
+
+    socket.on('both_players_ready', () => {
+      console.log('HELLO!?')
+    })
   }
 
   gameOver() {
     clearInterval(this.state.intervalID)
-
-    this.setState({...initialState, currWord: "Game Over"})
+    this.setState({...initialState, currWord: "Game Over", score: this.state.score})
   }
 
   handleSubmit(event) {
@@ -103,7 +110,7 @@ class App extends Component {
 
   render() {
     const Controls = (this.state.currWord === undefined || this.state.currWord === "Game Over")
-      ? <button className="button is-primary is-large" onClick={() => {this.props.socket.emit('start_game')}}>Start Game</button>
+      ? <Menu socket={this.props.socket} />
       : (
           <form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
             <input id="chat_input" type="text" autoComplete="off" value={this.state.textValue} onChange={this.handleTextChange.bind(this)} autoFocus />
