@@ -2,9 +2,14 @@ import React, { Component } from 'react'
 import 'bulma/css/bulma.css'
 import './Menu.css'
 
+/**
+  The buttons to start the game and instructions on how the game works.
+  The buttons will fire off an event to the server to start the game in whichever mode was selected.
+  The component has access to the socket through its props
+*/
+
 class Menu extends Component {
   render() {
-    //TODO: Add instructions for multiplayer
     return (
       <section className="section">
         <div className="container">

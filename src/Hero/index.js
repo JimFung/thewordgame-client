@@ -2,6 +2,9 @@ import React, { Component } from 'react'
 import 'bulma/css/bulma.css'
 import './Hero.css'
 
+/**
+  The Banner at the top of the page.
+*/
 class Hero extends Component {
   render() {
     return (
