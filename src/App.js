@@ -7,11 +7,6 @@ import { clamp } from './utils'
 import 'bulma/css/bulma.css'
 import './App.css'
 
-/**
-TODO:
-  - need to balance multiplayer, too slow right now.
-*/
-
 const initialState = {
   currWord: undefined,
   score: 0,
@@ -71,7 +66,6 @@ class App extends Component {
 
     //multiplayer events
     socket.on('join_room', room => {
-      console.log(`requesting to join ${room}`)
       socket.emit('join', room)
       this.setState({...this.state, room, renderMenu: false, currWord: ''})
     })
@@ -82,7 +76,6 @@ class App extends Component {
 
     socket.on('increase_speed', () => {
       //clear the old timer
-      console.log('increasing speed')
       const { difficulty, timerIntervalID } = this.increaseSpeed()
       this.setState({...this.state, difficulty, timerIntervalID})
     })
@@ -185,7 +178,7 @@ class App extends Component {
       ? (
         <div className="container box">
           <h1 className="title is-1">{this.state.currWord}</h1>
-          { this.state.room
+          { this.state.room || this.state.opponentTimer > 0
             ? <p className="subtitle is-5 is-pulled-left">YOU</p>
             : <span></span>
           }
