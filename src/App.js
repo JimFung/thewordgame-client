@@ -9,11 +9,7 @@ import './App.css'
 
 /**
 TODO:
-  - Keep multiplayer timers in fixed state after game to show how much you won/lost by
-  - input should not be rendered after multiplayer game is over
-  - should gracefully disconnect
   - need to balance multiplayer, too slow right now.
-  - if someone leaves you should win immeidately
 */
 
 const initialState = {
@@ -91,7 +87,7 @@ class App extends Component {
       this.setState({...this.state, difficulty, timerIntervalID})
     })
 
-    socket.on('game_over', () => this.gameOver())
+    socket.on('game_over', leaver => this.gameOver(leaver))
 
     socket.on('both_players_ready', () => {
       const ointerval = setInterval(() => socket.emit('trigger_update_opponent_timer', {to: this.state.oid, newTime: this.state.timer}), 10)
@@ -103,7 +99,7 @@ class App extends Component {
     //clear the old timer
     clearInterval(this.state.timerIntervalID)
 
-    const difficulty = difficultyClamp(this.state.difficulty - 15)
+    const difficulty = difficultyClamp(this.state.difficulty - 20)
     //start a new one
     const timerIntervalID = setInterval(() => {
       if(this.state.oid) {
@@ -121,19 +117,23 @@ class App extends Component {
     return { difficulty, timerIntervalID }
   }
 
-  gameOver() {
+  gameOver(leaver) {
     if(this.state.oid) {
       //Multiplayer logic
       this.socket.emit('leave', this.state.room)
       clearInterval(this.state.timerIntervalID)
       clearInterval(this.state.ointerval)
       let currWord = ''
-      if(this.state.timer > this.state.opponentTimer) {
-        currWord = `You Lose!`
-      } else if(this.state.timmer === this.state.opponentTimer) {
-        currWord = `Draw!`
+      if(leaver) {
+        currWord = `Your opponent has disconnected.`
       } else {
-        currWord = `You Win!`
+        if(this.state.timer > this.state.opponentTimer) {
+          currWord = `You Lose!`
+        } else if(this.state.timmer === this.state.opponentTimer) {
+          currWord = `Draw!`
+        } else {
+          currWord = `You Win!`
+        }
       }
       this.setState({...initialState, currWord, renderHUD: true, timer: this.state.timer, opponentTimer: this.state.opponentTimer})
     } else {
