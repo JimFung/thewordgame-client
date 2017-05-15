@@ -10,9 +10,10 @@ import './App.css'
 /**
 TODO:
   - Keep multiplayer timers in fixed state after game to show how much you won/lost by
-  - input should be rendered after multiplayer game is over
-  - should render score for single player games
-  - should gracefully disconnect/cleanup room
+  - input should not be rendered after multiplayer game is over
+  - should gracefully disconnect
+  - need to balance multiplayer, too slow right now.
+  - if someone leaves you should win immeidately
 */
 
 const initialState = {
@@ -25,7 +26,9 @@ const initialState = {
   room: null,
   opponentTimer: 0,
   ointerval: null,
-  oid: null
+  oid: null,
+  renderMenu: true,
+  renderHUD: false
 }
 
 const timerClamp = clamp(0, 100)
@@ -35,16 +38,17 @@ class App extends Component {
   constructor(props) {
     super(props)
     this.state = initialState
+    this.socket = this.props.socket
   }
 
   componentWillMount() {
-    let socket = this.props.socket
+    let socket = this.socket
 
-    socket.on('new_word', data => {
-      this.setState({...this.state, currWord: data.newWord, textValue: '', timer: timerClamp(this.state.timer - data.reduction)})
-    })
+    socket.on('new_word',
+      data => this.setState({...this.state, currWord: data.newWord, textValue: '', timer: timerClamp(this.state.timer - data.reduction)}))
 
     socket.on('first_word', data => {
+
       //Setting up the timer
       const timerIntervalID = setInterval(() => {
         this.state.timer < 100
@@ -52,7 +56,7 @@ class App extends Component {
           : this.gameOver()
       }, this.state.difficulty)
 
-        this.setState({...this.state, currWord: data, textValue: '', timerIntervalID})
+        this.setState({...this.state, currWord: data, textValue: '', timerIntervalID, renderMenu: false, opponentTimer: 0, timer: 0})
     })
 
     socket.on('penalty', () => this.setState({...this.state, textValue: '', timer: timerClamp(this.state.timer + 2)}))
@@ -73,7 +77,7 @@ class App extends Component {
     socket.on('join_room', room => {
       console.log(`requesting to join ${room}`)
       socket.emit('join', room)
-      this.setState({...this.state, room})
+      this.setState({...this.state, room, renderMenu: false, currWord: ''})
     })
 
     socket.on('oid', oid => this.setState({...this.state, oid}))
@@ -120,10 +124,10 @@ class App extends Component {
   gameOver() {
     if(this.state.oid) {
       //Multiplayer logic
-      // clear ointerval, tell opponent that you've finished the game.
+      this.socket.emit('leave', this.state.room)
       clearInterval(this.state.timerIntervalID)
       clearInterval(this.state.ointerval)
-      let currWord
+      let currWord = ''
       if(this.state.timer > this.state.opponentTimer) {
         currWord = `You Lose!`
       } else if(this.state.timmer === this.state.opponentTimer) {
@@ -131,11 +135,11 @@ class App extends Component {
       } else {
         currWord = `You Win!`
       }
-      this.setState({...initialState, currWord})
+      this.setState({...initialState, currWord, renderHUD: true, timer: this.state.timer, opponentTimer: this.state.opponentTimer})
     } else {
       //Single player logic
       clearInterval(this.state.timerIntervalID)
-      this.setState({...initialState, currWord: "Game Over", score: this.state.score})
+      this.setState({...initialState, currWord: "Game Over", score: this.state.score, renderHUD: true})
     }
   }
 
@@ -154,33 +158,50 @@ class App extends Component {
     this.setState({...this.state, textValue: event.target.value})
   }
 
-  render() {
-    const Controls = (this.state.currWord === undefined || this.state.currWord === "Game Over")
-      ? <Menu socket={this.props.socket} />
-      : (
-          <form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
+  renderControls() {
+    if(this.state.renderMenu) {
+      return <Menu socket={this.socket} renderHUD={() => this.setState({...this.state, renderHUD: true, renderMenu: false})}/>
+    } else {
+      if(this.state.room) {
+        if(this.state.oid) {
+          return (<form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
             <input id="chat_input" type="text" autoComplete="off" value={this.state.textValue} onChange={this.handleTextChange.bind(this)} autoFocus />
-          </form>
-        )
-
-    const HUD = (
-      <div className="container box">
-        <h1 className="title is-1">{this.state.currWord}</h1>
-        { this.state.room
-          ? <p className="subtitle is-5 is-pulled-left">YOU</p>
-          : <span></span>
+          </form>)
+        } else {
+          return (<div>Waiting for an opponent!</div>)
         }
-        <progress className="progress is-success is-medium" value={this.state.timer} max="100"></progress>
-        { this.state.room
-          ? (
-              <div>
-                <p className="subtitle is-5 is-pulled-left">THE OTHER GUY</p>
-                <progress className="progress is-danger is-medium" value={this.state.opponentTimer} max="100"></progress>
-              </div>
-            )
-          : <span></span> }
-      </div>
-    )
+      } else {
+        return (<form id="chat_form" onSubmit={this.handleSubmit.bind(this)}>
+          <input id="chat_input" type="text" autoComplete="off" value={this.state.textValue} onChange={this.handleTextChange.bind(this)} autoFocus />
+        </form>)
+      }
+    }
+  }
+
+  render() {
+    const Controls = this.renderControls()
+
+    const HUD = this.state.renderHUD
+      ? (
+        <div className="container box">
+          <h1 className="title is-1">{this.state.currWord}</h1>
+          { this.state.room
+            ? <p className="subtitle is-5 is-pulled-left">YOU</p>
+            : <span></span>
+          }
+          <progress className="progress is-success is-medium" value={this.state.timer} max="100"></progress>
+          { this.state.room || this.state.opponentTimer > 0
+            ? (
+                <div>
+                  <p className="subtitle is-5 is-pulled-left">THE OTHER GUY</p>
+                  <progress className="progress is-danger is-medium" value={this.state.opponentTimer} max="100"></progress>
+                </div>
+              )
+            : <h1 className="subtitle is-3">Score: {this.state.score}</h1> }
+        </div>
+      )
+      : <div></div>
+
     return (
       <div className="App">
         <Hero />

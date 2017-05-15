@@ -10,12 +10,12 @@ class Menu extends Component {
         <div className="container">
           <div className="field is-grouped">
             <div className="control left-button">
-              <div className="button is-success is-large" onClick={() => {this.props.socket.emit('start_single')}}>
+              <div className="button is-success is-large" onClick={() => {this.props.renderHUD(); this.props.socket.emit('start_single')}}>
                 Start Single Player
               </div>
             </div>
             <div className="control right-button">
-              <div className="button is-info is-large" onClick={() => {this.props.socket.emit('start_multiplayer')}}>
+              <div className="button is-info is-large" onClick={() => {this.props.renderHUD(); this.props.socket.emit('start_multiplayer')}}>
                 Start Multiplayer game
               </div>
             </div>
